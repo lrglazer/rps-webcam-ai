@@ -2,7 +2,7 @@
 
 Play rock paper scissors against an AI using your webcam. You train a neural network to recognize your hand shapes right in the browser, then face an opponent that learns your habits and tries to predict your next throw.
 
-**[▶ Play it live](https://lrglazer.github.io/rps-webcam-ai/)**
+**[▶ Play it live] https://lrglazer.github.io/rps-webcam-ai/**
 
 ![Screenshot of the game](screenshot.png)
 
