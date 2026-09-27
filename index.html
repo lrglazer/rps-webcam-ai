@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hand Signals — webcam rock paper scissors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1><span class="r">Rock</span> <span class="p">paper</span> <span class="s">scissors</span></h1>
+  <p class="lede">Teach a neural network your hand shapes through the webcam, then play against an opponent that studies your habits and tries to predict your next throw. Everything runs in your browser; no video leaves your device.</p>
+
+  <div class="grid">
+    <div>
+      <div class="cam" id="cam">
+        <video id="video" playsinline muted></video>
+        <div class="frame" id="frame" hidden></div>
+        <div class="rec" id="rec">Recording</div>
+        <div class="count" id="count"></div>
+        <div class="overlay" id="camOverlay">
+          <p>Your camera stays off until you start it.</p>
+          <button class="primary" id="startCam">Start camera</button>
+          <p id="camErr" class="err" hidden></p>
+        </div>
+      </div>
+      <p class="hint">Keep your hand inside the dashed square, with a plain background behind it if you can.</p>
+    </div>
+
+    <div>
+      <section class="panel off" id="p1">
+        <h2><span class="n">1</span>Teach your hand shapes</h2>
+        <p>Hold each button while making that shape. Move your hand around a little: closer, farther, tilted. Aim for 60+ samples of each.</p>
+        <div class="moves">
+          <button class="move rock" data-c="0"><span class="e">✊</span>Rock<small id="c0">0 samples</small></button>
+          <button class="move paper" data-c="1"><span class="e">✋</span>Paper<small id="c1">0 samples</small></button>
+          <button class="move scissors" data-c="2"><span class="e">✌️</span>Scissors<small id="c2">0 samples</small></button>
+        </div>
+        <p class="hint">On a keyboard you can also hold R, P or S.</p>
+      </section>
+
+      <section class="panel" id="p2">
+        <h2><span class="n">2</span>Train the model</h2>
+        <p id="trainMsg">A small convolutional network learns from your samples. Takes about 10–30 seconds.</p>
+        <div class="progress"><div id="prog"></div></div>
+        <div class="row"><button class="primary" id="trainBtn" disabled>Train model</button><span id="acc" class="hint" style="margin:0"></span></div>
+        <div class="row" style="margin-top:12px">
+          <button id="saveBtn" disabled>Save model</button>
+          <button id="loadBtn">Load saved model</button>
+          <span id="saveMsg" class="hint" style="margin:0"></span>
+        </div>
+      </section>
+
+      <section class="panel off" id="p3">
+        <h2><span class="n">3</span>Play</h2>
+        <p>The network's live read of your hand:</p>
+        <div class="bars" id="bars"></div>
+        <div class="arena">
+          <div><div class="who">You</div><div class="hand" id="youHand"></div></div>
+          <div class="vs">vs</div>
+          <div><div class="who">AI</div><div class="hand" id="aiHand"></div></div>
+        </div>
+        <div class="verdict" id="verdict"></div>
+        <div class="why" id="why"></div>
+        <div class="seen" id="seen" hidden><canvas id="seenCanvas" width="64" height="64"></canvas><span id="seenText"></span></div>
+        <div class="row"><button class="primary" id="playBtn">Play a round</button><button id="resetBtn">Reset score</button></div>
+        <div class="score">
+          <div><b id="sW">0</b><span>You won</span></div>
+          <div><b id="sD">0</b><span>Draws</span></div>
+          <div><b id="sL">0</b><span>AI won</span></div>
+        </div>
+        <div class="history" id="history" aria-label="Round history"></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- TensorFlow.js (runs the neural network in the browser) -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
