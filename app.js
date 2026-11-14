@@ -19,7 +19,7 @@ $('startCam').onclick=async()=>{
   try{
     const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:640}},audio:false});
     video.srcObject=stream; await video.play();
-    $('camOverlay').style.display='none'; $('frame').hidden=false;
+    $('camOverlay').style.display='none'; $('frame').hidden=false; $('cam').classList.add('live');
     $('p1').classList.remove('off');
   }catch(e){
     $('camErr').textContent=(e&&e.name==='NotAllowedError')
@@ -66,8 +66,9 @@ addEventListener('keydown',e=>{if(e.repeat||$('p1').classList.contains('off'))re
 addEventListener('keyup',e=>{if(KEYMAP[e.key.toLowerCase()]!==undefined)stopRec();});
 
 function updateCounts(){
-  samples.forEach((s,i)=>$('c'+i).textContent=s.length+(s.length>=MAX_PER_CLASS?' (full)':' samples'));
+  samples.forEach((s,i)=>{$('c'+i).textContent=s.length+(s.length>=MAX_PER_CLASS?' (full)':' samples');const r=$('ring'+i);if(r)r.style.strokeDashoffset=106.8*(1-Math.min(1,s.length/60));document.querySelector(`.move[data-c="${i}"]`).classList.toggle('ready',s.length>=60);});
   const ready=samples.every(s=>s.length>=20);
+  $('p1').classList.toggle('done',samples.every(s=>s.length>=60));
   $('trainBtn').disabled=!ready||busy;
   if(!ready) $('trainMsg').textContent='Collect at least 20 samples of each shape to unlock training.';
   else if(!model) $('trainMsg').textContent='A small convolutional network learns from your samples. Takes about 10–30 seconds.';
@@ -104,6 +105,7 @@ function augmented(src){
 $('trainBtn').onclick=async()=>{
   busy=true; $('trainBtn').disabled=true; stopPredicting();
   $('trainMsg').textContent='Training…'; $('acc').textContent=''; $('prog').style.width='0';
+  $('nn').classList.add('on'); accHist.length=0; drawSpark(); $('spark').classList.add('on');
   // Hold out the LAST 15% of each shape's samples for testing (never augmented, never trained on),
   // so the accuracy score reflects photos the model hasn't seen.
   const train=[], val=[];
@@ -126,14 +128,15 @@ $('trainBtn').onclick=async()=>{
       onEpochEnd:async(ep,logs)=>{
         $('prog').style.width=((ep+1)/EPOCHS*100)+'%';
         $('acc').textContent=`Epoch ${ep+1}/${EPOCHS}: ${(logs.val_acc*100).toFixed(0)}% accuracy on photos it never trained on`;
+        accHist.push(logs.val_acc); drawSpark();
         await tf.nextFrame();
       }}});
     $('trainMsg').textContent='Trained. If the live read below looks shaky, add more varied samples and train again.';
-    $('p3').classList.remove('off'); $('saveBtn').disabled=false; startPredicting();
+    $('p3').classList.remove('off'); $('p2').classList.add('done'); $('saveBtn').disabled=false; startPredicting();
   }catch(e){
     $('trainMsg').textContent='Training failed: '+e.message;
   }finally{
-    xs.dispose(); ys.dispose(); vx.dispose(); vy.dispose(); busy=false; updateCounts();
+    xs.dispose(); ys.dispose(); vx.dispose(); vy.dispose(); busy=false; updateCounts(); $('nn').classList.remove('on');
   }
 };
 
@@ -147,6 +150,7 @@ function startPredicting(){
     const probs=Array.from(await p.data()); p.dispose();
     recent.push({t:performance.now(),probs,s}); if(recent.length>30) recent.shift();
     probs.forEach((v,i)=>{$('b'+i).style.width=(v*100)+'%';$('v'+i).textContent=Math.round(v*100)+'%';});
+    updateHud(probs);
   },100);
 }
 function stopPredicting(){clearInterval(predictTimer);predictTimer=null;}
@@ -225,21 +229,26 @@ $('playBtn').onclick=async()=>{
   // AI commits before seeing your hand
   const guess=Math.random()<0.1?null:aiPredict();
   const aiMove=guess?(guess.move+1)%3:Math.floor(Math.random()*3);
-  for(const w of ['Rock','Paper','Scissors']){$('count').textContent=w;await sleep(550);}
-  $('count').textContent='Shoot!';
+  $('arena').className='arena'; $('youHand').textContent='✊'; $('aiHand').textContent='✊'; $('youHand').className='hand bob'; $('aiHand').className='hand bob';
+  for(const w of ['Rock','Paper','Scissors']){showCount(w,'go');await sleep(550);}
+  showCount('Shoot!','shoot'); $('flash').classList.remove('on'); void $('flash').offsetWidth; $('flash').classList.add('on'); $('cam').classList.remove('shake'); void $('cam').offsetWidth; $('cam').classList.add('shake');
   const {you,conf,frame}=await readSteadyHand();
-  $('count').textContent='';
+  $('count').textContent=''; $('youHand').className='hand'; $('aiHand').className='hand'; $('youHand').textContent=''; $('aiHand').textContent='';
   showSeen(frame, conf<0.5 ? 'What the camera saw at “Shoot!”' : `What the model saw at “Shoot!”: ${NAMES[you]}, ${Math.round(conf*100)}% sure`);
   if(conf<0.5){
     $('verdict').textContent='Couldn’t read your hand';
     $('why').textContent='Your hand never held still long enough. Throw on “Shoot!” and hold the shape inside the square for a moment.';
   }else{
-    $('youHand').textContent=EMOJI[you]; $('aiHand').textContent=EMOJI[aiMove];
+    $('youHand').textContent=EMOJI[you]; $('aiHand').textContent=EMOJI[aiMove]; $('youHand').className='hand reveal'; $('aiHand').className='hand reveal';
     const r=(you-aiMove+3)%3;
     const res=r===0?'d':r===1?'w':'l';
     score[res]++;
     $('verdict').textContent=res==='w'?'You win':res==='l'?'AI wins':'Draw';
     $('verdict').style.color=res==='w'?'var(--scissors)':res==='l'?'var(--lose)':'var(--ink)';
+    $('verdict').classList.remove('in'); void $('verdict').offsetWidth; $('verdict').classList.add('in');
+    $('arena').className='arena '+res; streak=res==='w'?streak+1:0;
+    $('streak').textContent=streak>=2?`🔥 ${streak} wins in a row`:''; if(streak>=2){$('streak').classList.remove('in');void $('streak').offsetWidth;$('streak').classList.add('in');}
+    if(res==='w') confetti(streak>=3?220:120);
     $('why').textContent=guess
       ? `The AI expected ${NAMES[guess.move].toLowerCase()}: ${guess.why}.`
       : 'The AI threw at random this round.';
@@ -247,12 +256,13 @@ $('playBtn').onclick=async()=>{
     $('history').appendChild(h);
     learn(you);
     $('sW').textContent=score.w; $('sD').textContent=score.d; $('sL').textContent=score.l;
+    const bid={w:'sW',d:'sD',l:'sL'}[res]; $(bid).classList.remove('bump'); void $(bid).offsetWidth; $(bid).classList.add('bump');
   }
   busy=false; $('playBtn').disabled=false; updateCounts();
 };
 $('resetBtn').onclick=()=>{
   score.w=score.d=score.l=0; hist.length=0; table[1]={};table[2]={};table[3]={};
-  ['sW','sD','sL'].forEach(id=>$(id).textContent='0'); $('history').innerHTML='';
+  ['sW','sD','sL'].forEach(id=>$(id).textContent='0'); $('history').innerHTML=''; streak=0; $('streak').textContent=''; $('arena').className='arena';
   $('youHand').textContent=''; $('aiHand').textContent=''; $('verdict').textContent=''; $('why').textContent='';
 };
 
@@ -267,7 +277,7 @@ $('loadBtn').onclick=async()=>{
   try{
     const m=await tf.loadLayersModel(MODEL_KEY);
     if(model) model.dispose();
-    model=m; $('saveBtn').disabled=false;
+    model=m; $('saveBtn').disabled=false; $('p2').classList.add('done');
     $('saveMsg').textContent='Loaded your saved model.';
     $('p3').classList.remove('off');
     if(video.videoWidth) startPredicting();
@@ -276,3 +286,51 @@ $('loadBtn').onclick=async()=>{
 };
 // If the model was loaded before the camera started, begin predicting once video is live
 video.addEventListener('playing',()=>{ if(model) startPredicting(); });
+
+/* ---------- visual effects ---------- */
+let streak=0, lastTop=-1;
+const accHist=[];
+function showCount(text,cls){const c=$('count');c.textContent=text;c.className='count';void c.offsetWidth;c.className='count '+cls;}
+function drawSpark(){
+  const n=accHist.length; if(!n){$('sparkLine').setAttribute('points','');return;}
+  const pts=accHist.map((v,i)=>`${n<2?0:i/(n-1)*300},${48-v*44}`).join(' ');
+  $('sparkLine').setAttribute('points',n<2?pts+' 300,'+(48-accHist[0]*44):pts);
+}
+const HEX={0:'#8F86FF',1:'#FFC24B',2:'#3FE0C0'};
+function updateHud(probs){
+  const c=Math.max(...probs), m=probs.indexOf(c), hud=$('hud'), fr=$('frame');
+  hud.hidden=false;
+  document.querySelectorAll('.bar').forEach((b,i)=>b.classList.toggle('top',i===m&&c>=.5));
+  if(c>=.7){
+    $('hudE').textContent=EMOJI[m]; $('hudT').textContent=`${NAMES[m]} · ${Math.round(c*100)}%`;
+    fr.style.setProperty('--fc',HEX[m]); fr.classList.add('lock');
+    if(m!==lastTop){hud.classList.remove('pop');void hud.offsetWidth;hud.classList.add('pop');lastTop=m;}
+  }else{
+    $('hudE').textContent='🤔'; $('hudT').textContent='Not sure yet…';
+    fr.style.setProperty('--fc','rgba(255,255,255,.8)'); fr.classList.remove('lock'); lastTop=-1;
+  }
+}
+/* neural network diagram for the training panel */
+(function drawNN(){
+  const svg=$('nnSvg'), layers=[[3,'input'],[5,'conv'],[5,'conv'],[4,'dense'],[3,'output']], ns='http://www.w3.org/2000/svg';
+  const pos=layers.map(([k],li)=>Array.from({length:k},(_,j)=>({x:30+li*85,y:12+(j+.5)*(92/k)})));
+  pos.forEach((L,li)=>{if(li<pos.length-1)L.forEach(a=>pos[li+1].forEach(b=>{const l=document.createElementNS(ns,'line');l.setAttribute('x1',a.x);l.setAttribute('y1',a.y);l.setAttribute('x2',b.x);l.setAttribute('y2',b.y);l.style.animationDelay=(Math.random()*-1.4)+'s';svg.appendChild(l);}));});
+  pos.forEach((L,li)=>{L.forEach((p,j)=>{const c=document.createElementNS(ns,'circle');c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);c.setAttribute('r',li===4?7:5.5);c.style.animationDelay=(li*.18+j*.05)+'s';svg.appendChild(c);});
+    const t=document.createElementNS(ns,'text');t.setAttribute('x',pos[li][0].x);t.setAttribute('y',116);t.textContent=layers[li][1];svg.appendChild(t);});
+})();
+/* confetti */
+const cv=$('confetti'), cx=cv.getContext('2d'); let parts=[], raf=0;
+function confetti(n){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  cv.width=innerWidth*devicePixelRatio; cv.height=innerHeight*devicePixelRatio;
+  const cols=['#8F86FF','#FFC24B','#3FE0C0','#FF5C7A','#ffffff'];
+  for(let i=0;i<n;i++) parts.push({x:cv.width/2+(Math.random()-.5)*cv.width*.3,y:cv.height*.35,vx:(Math.random()-.5)*22,vy:-Math.random()*20-8,r:Math.random()*Math.PI,vr:(Math.random()-.5)*.4,s:(6+Math.random()*8)*devicePixelRatio,c:cols[i%cols.length],life:0});
+  if(!raf) raf=requestAnimationFrame(tick);
+}
+function tick(){
+  cx.clearRect(0,0,cv.width,cv.height);
+  parts.forEach(p=>{p.vy+=.6;p.vx*=.99;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;p.life++;
+    cx.save();cx.translate(p.x,p.y);cx.rotate(p.r);cx.fillStyle=p.c;cx.fillRect(-p.s/2,-p.s/4,p.s,p.s/2);cx.restore();});
+  parts=parts.filter(p=>p.y<cv.height+40&&p.life<240);
+  raf=parts.length?requestAnimationFrame(tick):0;
+}

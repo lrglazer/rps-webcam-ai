@@ -10,17 +10,21 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="bg" aria-hidden="true"><i></i><i></i><i></i><span class="fl">✊</span><span class="fl">✋</span><span class="fl">✌️</span><span class="fl">✊</span><span class="fl">✋</span><span class="fl">✌️</span></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
 <main>
-  <h1><span class="r">Rock</span> <span class="p">paper</span> <span class="s">scissors</span></h1>
+  <div class="kicker"><span class="dot"></span>CNN · TensorFlow.js · runs in your browser</div>
+  <h1><span class="r">Rock</span> <span class="p">paper</span> <span class="s">scissors</span><span class="ai">AI</span></h1>
   <p class="lede">Teach a neural network your hand shapes through the webcam, then play against an opponent that studies your habits and tries to predict your next throw. Everything runs in your browser; no video leaves your device.</p>
 
   <div class="grid">
     <div>
       <div class="cam" id="cam">
         <video id="video" playsinline muted></video>
-        <div class="frame" id="frame" hidden></div>
+        <div class="frame" id="frame" hidden><b></b><b></b><b></b><b></b><div class="scan" id="scan"></div></div>
+        <div class="hud" id="hud" hidden><span id="hudE"></span><span id="hudT">Waiting…</span></div>
         <div class="rec" id="rec">Recording</div>
-        <div class="count" id="count"></div>
+        <div class="count" id="count"></div><div class="flash" id="flash"></div>
         <div class="overlay" id="camOverlay">
           <p>Your camera stays off until you start it.</p>
           <button class="primary" id="startCam">Start camera</button>
@@ -35,9 +39,9 @@
         <h2><span class="n">1</span>Teach your hand shapes</h2>
         <p>Hold each button while making that shape. Move your hand around a little: closer, farther, tilted. Aim for 60+ samples of each.</p>
         <div class="moves">
-          <button class="move rock" data-c="0"><span class="e">✊</span>Rock<small id="c0">0 samples</small></button>
-          <button class="move paper" data-c="1"><span class="e">✋</span>Paper<small id="c1">0 samples</small></button>
-          <button class="move scissors" data-c="2"><span class="e">✌️</span>Scissors<small id="c2">0 samples</small></button>
+          <button class="move rock" data-c="0"><svg class="ring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17"/><circle class="fill" id="ring0" cx="20" cy="20" r="17"/></svg><span class="e">✊</span>Rock<small id="c0">0 samples</small></button>
+          <button class="move paper" data-c="1"><svg class="ring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17"/><circle class="fill" id="ring1" cx="20" cy="20" r="17"/></svg><span class="e">✋</span>Paper<small id="c1">0 samples</small></button>
+          <button class="move scissors" data-c="2"><svg class="ring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17"/><circle class="fill" id="ring2" cx="20" cy="20" r="17"/></svg><span class="e">✌️</span>Scissors<small id="c2">0 samples</small></button>
         </div>
         <p class="hint">On a keyboard you can also hold R, P or S.</p>
       </section>
@@ -45,7 +49,9 @@
       <section class="panel" id="p2">
         <h2><span class="n">2</span>Train the model</h2>
         <p id="trainMsg">A small convolutional network learns from your samples. Takes about 10–30 seconds.</p>
+        <div class="nn" id="nn" aria-hidden="true"><svg viewBox="0 0 400 120" id="nnSvg"></svg></div>
         <div class="progress"><div id="prog"></div></div>
+        <svg class="spark" id="spark" viewBox="0 0 300 50" preserveAspectRatio="none" aria-hidden="true"><polyline id="sparkLine" points=""/></svg>
         <div class="row"><button class="primary" id="trainBtn" disabled>Train model</button><span id="acc" class="hint" style="margin:0"></span></div>
         <div class="row" style="margin-top:12px">
           <button id="saveBtn" disabled>Save model</button>
@@ -58,7 +64,7 @@
         <h2><span class="n">3</span>Play</h2>
         <p>The network's live read of your hand:</p>
         <div class="bars" id="bars"></div>
-        <div class="arena">
+        <div class="arena" id="arena">
           <div><div class="who">You</div><div class="hand" id="youHand"></div></div>
           <div class="vs">vs</div>
           <div><div class="who">AI</div><div class="hand" id="aiHand"></div></div>
@@ -67,6 +73,7 @@
         <div class="why" id="why"></div>
         <div class="seen" id="seen" hidden><canvas id="seenCanvas" width="64" height="64"></canvas><span id="seenText"></span></div>
         <div class="row"><button class="primary" id="playBtn">Play a round</button><button id="resetBtn">Reset score</button></div>
+        <div class="streak" id="streak"></div>
         <div class="score">
           <div><b id="sW">0</b><span>You won</span></div>
           <div><b id="sD">0</b><span>Draws</span></div>
