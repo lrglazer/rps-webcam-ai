@@ -195,3 +195,10 @@ button.primary:hover:not(:disabled){box-shadow:0 14px 36px -10px rgba(143,134,25
 .seen[hidden]{display:none}
 .seen canvas{width:72px;height:72px;border-radius:12px;transform:scaleX(-1);image-rendering:pixelated;flex:none;border:2px solid var(--line)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+.skel{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none}
+.src{display:flex;gap:6px;padding:5px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid var(--line);margin-bottom:10px}
+.src button{flex:1;padding:10px 12px;background:transparent;border:0;font-size:.92rem}
+.src button.on{background:linear-gradient(135deg,var(--rock),#6A5CF0);color:#fff;box-shadow:0 6px 20px -8px rgba(143,134,255,.9)}
+.src button:hover:not(:disabled){transform:none}
+.opt{font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin-left:4px}

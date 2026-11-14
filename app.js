@@ -20,6 +20,7 @@ $('startCam').onclick=async()=>{
     const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:640}},audio:false});
     video.srcObject=stream; await video.play();
     $('camOverlay').style.display='none'; $('frame').hidden=false; $('cam').classList.add('live');
+    initTracker();
     $('p1').classList.remove('off');
   }catch(e){
     $('camErr').textContent=(e&&e.name==='NotAllowedError')
@@ -132,7 +133,7 @@ $('trainBtn').onclick=async()=>{
         await tf.nextFrame();
       }}});
     $('trainMsg').textContent='Trained. If the live read below looks shaky, add more varied samples and train again.';
-    $('p3').classList.remove('off'); $('p2').classList.add('done'); $('saveBtn').disabled=false; startPredicting();
+    $('p3').classList.remove('off'); $('p2').classList.add('done'); $('saveBtn').disabled=false; $('srcCnn').disabled=false; setSource('cnn');
   }catch(e){
     $('trainMsg').textContent='Training failed: '+e.message;
   }finally{
@@ -145,9 +146,14 @@ $('bars').innerHTML=NAMES.map((n,i)=>`<div class="bar"><span>${EMOJI[i]} ${n}</s
 function startPredicting(){
   stopPredicting();
   predictTimer=setInterval(async()=>{
-    const s=snapshot(); if(!s||!model) return;
-    const p=tf.tidy(()=>model.predict(tf.tensor4d(s,[1,S,S,3])));
-    const probs=Array.from(await p.data()); p.dispose();
+    const s=snapshot(); if(!s) return;
+    let probs;
+    if(source==='track'){ probs=trackProbs(); if(!probs) return; }
+    else{
+      if(!model) return;
+      const p=tf.tidy(()=>model.predict(tf.tensor4d(s,[1,S,S,3])));
+      probs=Array.from(await p.data()); p.dispose();
+    }
     recent.push({t:performance.now(),probs,s}); if(recent.length>30) recent.shift();
     probs.forEach((v,i)=>{$('b'+i).style.width=(v*100)+'%';$('v'+i).textContent=Math.round(v*100)+'%';});
     updateHud(probs);
@@ -277,7 +283,7 @@ $('loadBtn').onclick=async()=>{
   try{
     const m=await tf.loadLayersModel(MODEL_KEY);
     if(model) model.dispose();
-    model=m; $('saveBtn').disabled=false; $('p2').classList.add('done');
+    model=m; $('saveBtn').disabled=false; $('p2').classList.add('done'); $('srcCnn').disabled=false; setSource('cnn');
     $('saveMsg').textContent='Loaded your saved model.';
     $('p3').classList.remove('off');
     if(video.videoWidth) startPredicting();
@@ -285,7 +291,7 @@ $('loadBtn').onclick=async()=>{
   }catch(e){ $('saveMsg').textContent='No saved model found yet. Train one and press Save model.'; }
 };
 // If the model was loaded before the camera started, begin predicting once video is live
-video.addEventListener('playing',()=>{ if(model) startPredicting(); });
+video.addEventListener('playing',()=>{ if(model||source==='track') startPredicting(); });
 
 /* ---------- visual effects ---------- */
 let streak=0, lastTop=-1;
@@ -334,3 +340,73 @@ function tick(){
   parts=parts.filter(p=>p.y<cv.height+40&&p.life<240);
   raf=parts.length?requestAnimationFrame(tick):0;
 }
+
+
+/* ---------- hand tracking (MediaPipe): reads rock / paper / scissors from finger joints ---------- */
+let source='track', tracker=null, trackRes=null, trackLoop=0, lastVT=-1;
+const MP='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+async function initTracker(){
+  $('srcMsg').textContent='Loading hand tracking…';
+  try{
+    const {FilesetResolver,HandLandmarker}=await import(MP+'/vision_bundle.mjs');
+    const fs=await FilesetResolver.forVisionTasks(MP+'/wasm');
+    const opts=d=>({baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:d},runningMode:'VIDEO',numHands:1,minHandDetectionConfidence:.5,minHandPresenceConfidence:.5,minTrackingConfidence:.5});
+    try{ tracker=await HandLandmarker.createFromOptions(fs,opts('GPU')); }
+    catch(e){ tracker=await HandLandmarker.createFromOptions(fs,opts('CPU')); }
+    $('p3').classList.remove('off');
+    $('srcMsg').textContent='Hand tracking is on: it finds the 21 joints of your hand and checks which fingers are straight. No training needed.';
+    trackFrame();
+    if(source==='track') startPredicting();
+  }catch(e){
+    console.error(e); tracker=null;
+    $('srcTrack').disabled=true; source='cnn'; $('srcTrack').classList.remove('on');
+    $('srcMsg').textContent='Hand tracking could not load on this device, so train your own model in steps 1 and 2.';
+  }
+}
+function trackFrame(){
+  if(source==='track'&&tracker&&video.readyState>=2&&video.currentTime!==lastVT){
+    lastVT=video.currentTime;
+    try{ const r=tracker.detectForVideo(video,performance.now()); trackRes=r.landmarks&&r.landmarks[0]?r.landmarks[0]:null; }catch(e){ trackRes=null; }
+    drawSkeleton();
+  }
+  trackLoop=requestAnimationFrame(trackFrame);
+}
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,(a.z-b.z)*.5);
+const ext=(L,tip,pip,mcp)=>{ // 0 = curled, 1 = straight
+  const r=dist(L[0],L[tip])/Math.max(1e-6,dist(L[0],L[pip]));
+  const s=Math.min(1,Math.max(0,(r-1.0)/0.3));
+  const r2=dist(L[mcp],L[tip])/Math.max(1e-6,dist(L[mcp],L[pip])); // tip beyond the middle joint
+  return Math.min(s,Math.min(1,Math.max(0,(r2-1.2)/0.5)));
+};
+function trackProbs(){
+  if(!trackRes) return null;
+  const L=trackRes, i=ext(L,8,6,5), m=ext(L,12,10,9), r=ext(L,16,14,13), p=ext(L,20,18,17);
+  const paper=(i*m*r*p)**.5*.6+((i+m+r+p)/4)**2*.4;
+  const scissors=i*m*(1-r)*(1-p);
+  const rock=(1-i)*(1-m)*(1-r)*(1-p)*.7+((4-i-m-r-p)/4)**2*.3;
+  const sum=rock+paper+scissors+1e-6;
+  return [rock/sum,paper/sum,scissors/sum];
+}
+const BONES=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawSkeleton(){
+  const c=$('skel'), ctx=c.getContext('2d'), W=c.clientWidth*devicePixelRatio, H=c.clientHeight*devicePixelRatio;
+  if(c.width!==W||c.height!==H){c.width=W;c.height=H;}
+  ctx.clearRect(0,0,W,H); if(!trackRes) return;
+  // video is object-fit:cover in a square; map normalized video coords to the square
+  const vw=video.videoWidth, vh=video.videoHeight, sc=Math.max(W/vw,H/vh), ox=(W-vw*sc)/2, oy=(H-vh*sc)/2;
+  const P=L=>[ox+L.x*vw*sc, oy+L.y*vh*sc];
+  const col=getComputedStyle($('frame')).getPropertyValue('--fc')||'#8F86FF';
+  ctx.lineCap='round'; ctx.shadowColor=col; ctx.shadowBlur=14*devicePixelRatio;
+  ctx.strokeStyle=col; ctx.lineWidth=4*devicePixelRatio; ctx.globalAlpha=.9;
+  ctx.beginPath(); for(const [a,b] of BONES){const [x1,y1]=P(trackRes[a]),[x2,y2]=P(trackRes[b]);ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);} ctx.stroke();
+  ctx.shadowBlur=0; ctx.globalAlpha=1;
+  trackRes.forEach((L,k)=>{const [x,y]=P(L);ctx.fillStyle=[4,8,12,16,20].includes(k)?'#fff':col;ctx.beginPath();ctx.arc(x,y,(k%4===0?5.5:3.5)*devicePixelRatio,0,7);ctx.fill();});
+}
+function setSource(s){
+  source=s; $('srcTrack').classList.toggle('on',s==='track'); $('srcCnn').classList.toggle('on',s==='cnn');
+  $('srcMsg').textContent=s==='track'?'Hand tracking is on: it finds the 21 joints of your hand and checks which fingers are straight. No training needed.':'Using the CNN you trained on your own photos.';
+  if(s==='cnn'){ trackRes=null; const c=$('skel'); c.getContext('2d').clearRect(0,0,c.width,c.height); }
+  startPredicting();
+}
+$('srcTrack').onclick=()=>{ if(tracker) setSource('track'); };
+$('srcCnn').onclick=()=>{ if(model) setSource('cnn'); };
