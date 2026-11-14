@@ -6,16 +6,19 @@
 <title>Hand Signals — webcam rock paper scissors</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Bungee&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="bg" aria-hidden="true"><i></i><i></i><i></i><span class="fl">✊</span><span class="fl">✋</span><span class="fl">✌️</span><span class="fl">✊</span><span class="fl">✋</span><span class="fl">✌️</span></div>
+<div class="bg" aria-hidden="true"><div class="sky"></div><div class="sun"></div><div class="floor"></div><i></i><i></i><i></i><span class="fl">✊</span><span class="fl">✋</span><span class="fl">✌️</span><span class="fl">✊</span><span class="fl">✋</span><span class="fl">✌️</span></div>
 <canvas id="confetti" aria-hidden="true"></canvas>
+<div class="burst" id="burst" aria-live="polite"></div>
+<button class="mute" id="mute" type="button" aria-label="Sound on">🔊</button>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 <main>
-  <div class="kicker"><span class="dot"></span>CNN · TensorFlow.js · runs in your browser</div>
+  <div class="kicker"><span class="dot"></span>Hand tracking · CNN · runs in your browser</div>
   <h1><span class="r">Rock</span> <span class="p">paper</span> <span class="s">scissors</span><span class="ai">AI</span></h1>
-  <p class="lede">Teach a neural network your hand shapes through the webcam, then play against an opponent that studies your habits and tries to predict your next throw. Everything runs in your browser; no video leaves your device.</p>
+  <p class="lede">Throw your hand at the webcam and battle RPS-BOT 9000, an AI that studies your habits and tries to predict your next move. Knock it out before it knocks you out. Everything runs in your browser; no video leaves your device.</p>
 
   <div class="grid">
     <div>
@@ -69,10 +72,19 @@
         </div>
         <p id="srcMsg">Hand tracking finds the 21 joints of your hand and checks which fingers are straight. No training needed.</p>
         <div class="bars" id="bars"></div>
+        <div class="diff" role="group" aria-label="Difficulty">
+          <button type="button" data-d="easy">😇 Easy</button><button type="button" data-d="normal" class="on">🤖 Normal</button><button type="button" data-d="boss">💀 Boss</button>
+        </div>
+        <div class="fight">
+          <div class="fbar you"><div class="nm"><span>YOU</span><span id="youStars"></span></div><div class="hp"><i id="hpY"></i></div></div>
+          <div class="rnd"><small>ROUND</small><b id="rnd">1</b></div>
+          <div class="fbar bot"><div class="nm"><span id="botStars"></span><span>RPS-BOT 9000</span></div><div class="hp"><i id="hpB"></i></div></div>
+        </div>
+        <div class="meter"><span>SUPER</span><b><i id="superBar"></i></b><em id="superTxt"></em></div>
         <div class="arena" id="arena">
-          <div><div class="who">You</div><div class="hand" id="youHand"></div></div>
-          <div class="vs">vs</div>
-          <div><div class="who">AI</div><div class="hand" id="aiHand"></div></div>
+          <div class="side"><div class="who">You</div><div class="hand" id="youHand"></div><div class="tag" id="youTag"></div></div>
+          <div class="vs">VS</div>
+          <div class="side"><div class="who">AI</div><div class="bot" id="bot">🤖</div><div class="taunt" id="taunt"></div><div class="hand" id="aiHand"></div><div class="tag" id="aiTag"></div></div>
         </div>
         <div class="verdict" id="verdict"></div>
         <div class="why" id="why"></div>
@@ -85,6 +97,7 @@
           <div><b id="sL">0</b><span>AI won</span></div>
         </div>
         <div class="history" id="history" aria-label="Round history"></div>
+        <div class="best" id="best"></div>
       </section>
     </div>
   </div>

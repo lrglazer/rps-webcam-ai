@@ -233,8 +233,10 @@ $('playBtn').onclick=async()=>{
   if(busy) return; busy=true; $('playBtn').disabled=true; $('trainBtn').disabled=true;
   $('youHand').textContent=''; $('aiHand').textContent=''; $('verdict').textContent=''; $('why').textContent=''; $('seen').hidden=true;
   // AI commits before seeing your hand
-  const guess=Math.random()<0.1?null:aiPredict();
+  if(matchOver) resetMatch();
+  const guess=difficulty==='easy'?null:difficulty==='boss'?(aiPredict()||bossGuess()):(Math.random()<0.1?null:aiPredict());
   const aiMove=guess?(guess.move+1)%3:Math.floor(Math.random()*3);
+  say(R1(TAUNT.pre));
   $('arena').className='arena'; $('youHand').textContent='✊'; $('aiHand').textContent='✊'; $('youHand').className='hand bob'; $('aiHand').className='hand bob';
   for(const w of ['Rock','Paper','Scissors']){showCount(w,'go');await sleep(550);}
   showCount('Shoot!','shoot'); $('flash').classList.remove('on'); void $('flash').offsetWidth; $('flash').classList.add('on'); $('cam').classList.remove('shake'); void $('cam').offsetWidth; $('cam').classList.add('shake');
@@ -242,6 +244,7 @@ $('playBtn').onclick=async()=>{
   $('count').textContent=''; $('youHand').className='hand'; $('aiHand').className='hand'; $('youHand').textContent=''; $('aiHand').textContent='';
   showSeen(frame, conf<0.5 ? 'What the camera saw at “Shoot!”' : `What the model saw at “Shoot!”: ${NAMES[you]}, ${Math.round(conf*100)}% sure`);
   if(conf<0.5){
+    say('Show me a hand, human! 🙄');
     $('verdict').textContent='Couldn’t read your hand';
     $('why').textContent='Your hand never held still long enough. Throw on “Shoot!” and hold the shape inside the square for a moment.';
   }else{
@@ -260,15 +263,17 @@ $('playBtn').onclick=async()=>{
       : 'The AI threw at random this round.';
     const h=document.createElement('i'); h.className=res; h.textContent=EMOJI[you]; h.title=`You: ${NAMES[you]}, AI: ${NAMES[aiMove]}`;
     $('history').appendChild(h);
+    onRound(res,you,aiMove,guess);
     learn(you);
     $('sW').textContent=score.w; $('sD').textContent=score.d; $('sL').textContent=score.l;
     const bid={w:'sW',d:'sD',l:'sL'}[res]; $(bid).classList.remove('bump'); void $(bid).offsetWidth; $(bid).classList.add('bump');
   }
   busy=false; $('playBtn').disabled=false; updateCounts();
+  $('playBtn').textContent=matchOver?'Rematch!':'Play a round';
 };
 $('resetBtn').onclick=()=>{
   score.w=score.d=score.l=0; hist.length=0; table[1]={};table[2]={};table[3]={};
-  ['sW','sD','sL'].forEach(id=>$(id).textContent='0'); $('history').innerHTML=''; streak=0; $('streak').textContent=''; $('arena').className='arena';
+  ['sW','sD','sL'].forEach(id=>$(id).textContent='0'); $('history').innerHTML=''; streak=0; $('streak').textContent=''; $('arena').className='arena'; resetMatch(); round=1; $('rnd').textContent=1; $('playBtn').textContent='Play a round';
   $('youHand').textContent=''; $('aiHand').textContent=''; $('verdict').textContent=''; $('why').textContent='';
 };
 
@@ -296,7 +301,7 @@ video.addEventListener('playing',()=>{ if(model||source==='track') startPredicti
 /* ---------- visual effects ---------- */
 let streak=0, lastTop=-1;
 const accHist=[];
-function showCount(text,cls){const c=$('count');c.textContent=text;c.className='count';void c.offsetWidth;c.className='count '+cls;}
+function showCount(text,cls){const c=$('count');c.textContent=text;c.className='count';void c.offsetWidth;c.className='count '+cls;cls==='shoot'?sfx.shoot():sfx.beep();}
 function drawSpark(){
   const n=accHist.length; if(!n){$('sparkLine').setAttribute('points','');return;}
   const pts=accHist.map((v,i)=>`${n<2?0:i/(n-1)*300},${48-v*44}`).join(' ');
@@ -410,3 +415,117 @@ function setSource(s){
 }
 $('srcTrack').onclick=()=>{ if(tracker) setSource('track'); };
 $('srcCnn').onclick=()=>{ if(model) setSource('cnn'); };
+
+
+/* ---------- arcade layer: sound, health, super meter, taunts, difficulty, achievements ---------- */
+let difficulty='normal', hpY=100, hpB=100, superM=0, round=1, matchOver=false, roundLostHp=false, lastRes=null, lastAi=null;
+const R1=a=>a[Math.floor(Math.random()*a.length)];
+const TAUNT={
+  pre:['Ready to lose? 😎','I can read you like a book 📖','My circuits are warmed up ⚡','Beep boop… pick something 🤖','I already know your move 🔮'],
+  win:['Nooo! Lucky shot 😤','Recalibrating… 🔧','That was a glitch!','Okay, okay, not bad 👀','You got me… this time.'],
+  lose:['Called it! 😏','Too predictable 📈','Beep boop, rekt 🤖','Is that all you got?','My model is undefeated 💅'],
+  draw:['Great minds think alike 🤝','Jinx! 🙃','Copycat!','Hmm… a stalemate.'],
+  read:['I KNEW you’d throw {m} 🧠','{m} again? Classic 😏'],
+  ko:['SYSTEM… FAILURE… 💥','I’ll be back 🤖','Fine. Rematch?'],
+  koMe:['GG EZ 😎','Flawless logic wins again','Better luck next time, human'],
+};
+function say(t){const el=$('taunt');el.textContent=t;el.classList.add('on');clearTimeout(say.t);say.t=setTimeout(()=>el.classList.remove('on'),2600);}
+function burst(text,cls){const b=$('burst');b.innerHTML=text;b.className='burst';void b.offsetWidth;b.className='burst on '+cls;}
+function bossGuess(){ // no pattern yet: win-stay / lose-shift human tendency
+  if(lastRes==null||!hist.length) return null;
+  const prev=hist[hist.length-1];
+  if(lastRes==='w') return {move:prev,why:'people who win usually throw the same thing again'};
+  if(lastRes==='l') return {move:(lastAi+1)%3,why:'people who lose usually switch to what beats my last move'};
+  return null;
+}
+document.querySelectorAll('.diff button').forEach(b=>b.onclick=()=>{difficulty=b.dataset.d;document.querySelectorAll('.diff button').forEach(x=>x.classList.toggle('on',x===b));
+  say(difficulty==='boss'?'Boss mode. Prepare yourself 💀':difficulty==='easy'?'I’ll go easy on you 😇':'Normal mode. Let’s go 🤖');sfx.click();});
+function setHp(){
+  $('hpY').style.width=hpY+'%'; $('hpB').style.width=hpB+'%';
+  $('hpY').parentElement.classList.toggle('low',hpY<=25&&hpY>0); $('hpB').parentElement.classList.toggle('low',hpB<=25&&hpB>0);
+  $('superBar').style.width=superM+'%'; $('superTxt').textContent=superM>=100?'READY!':'';
+  document.querySelector('.meter').classList.toggle('full',superM>=100);
+}
+function hitBar(id){const e=$(id).parentElement;e.classList.remove('hit');void e.offsetWidth;e.classList.add('hit');}
+function shakeAll(){document.body.classList.remove('shake');void document.body.offsetWidth;document.body.classList.add('shake');}
+function resetMatch(){hpY=100;hpB=100;matchOver=false;roundLostHp=false;setHp();}
+const stats=(()=>{try{return JSON.parse(localStorage.getItem('rps-stats'))||{}}catch(e){return {}}})();
+stats.best=stats.best||0; stats.kos=stats.kos||0; stats.ach=stats.ach||{};
+function saveStats(){try{localStorage.setItem('rps-stats',JSON.stringify(stats))}catch(e){} $('best').textContent=`🏆 Best streak: ${stats.best} · K.O.s: ${stats.kos} · Achievements: ${Object.keys(stats.ach).length}/${ACH.length}`;}
+const ACH=[['first','🥇','First blood','Win your first round'],['streak3','🔥','On fire','Win 3 in a row'],['streak5','☄️','Unstoppable','Win 5 in a row'],['ko','💥','K.O.!','Knock out RPS-BOT 9000'],['flawless','✨','Flawless victory','Win a match without losing any health'],['boss','💀','Boss slayer','Beat the bot on Boss mode'],['super','⚡','Super move','Land a super hit'],['outsmart','🧠','Mind games','Win a round the bot thought it predicted']];
+function unlock(id){if(stats.ach[id])return;stats.ach[id]=1;const a=ACH.find(x=>x[0]===id);const t=document.createElement('div');t.className='toast';t.innerHTML=`<span class="ic">${a[1]}</span><span><b>Achievement unlocked</b>${a[2]} · ${a[3]}</span>`;$('toasts').appendChild(t);setTimeout(()=>t.remove(),3800);sfx.ach();saveStats();}
+function onRound(res,you,ai,guess){
+  lastRes=res; lastAi=ai; round++; $('rnd').textContent=round;
+  $('youTag').textContent=NAMES[you].toUpperCase(); $('aiTag').textContent=NAMES[ai].toUpperCase();
+  ['youTag','aiTag'].forEach(id=>{$(id).classList.remove('on');void $(id).offsetWidth;$(id).classList.add('on');});
+  sparks(res);
+  if(res==='w'){
+    const isSuper=superM>=100, dmg=isSuper?50:(streak>=3?30:25);
+    hpB=Math.max(0,hpB-dmg); superM=isSuper?0:Math.min(100,superM+34); hitBar('hpB'); shakeAll();
+    $('bot').classList.remove('mad');void $('bot').offsetWidth;$('bot').classList.add('mad');
+    if(isSuper){burst('SUPER<br>HIT!','super');unlock('super');sfx.superHit();}
+    else{burst(streak>=3?`${streak} HIT<br>COMBO!`:'YOU WIN!','w');sfx.win();}
+    say(guess&&guess.move!==you?R1(TAUNT.win):R1(TAUNT.win));
+    if(guess) unlock('outsmart');
+    unlock('first'); if(streak>=3)unlock('streak3'); if(streak>=5)unlock('streak5');
+    if(streak>stats.best){stats.best=streak;saveStats();}
+  }else if(res==='l'){
+    hpY=Math.max(0,hpY-25); roundLostHp=true; superM=Math.max(0,superM-10); hitBar('hpY'); shakeAll();
+    burst('BOT WINS','l'); sfx.lose();
+    say(guess?R1(TAUNT.read).replace('{m}',NAMES[you].toLowerCase()):R1(TAUNT.lose));
+  }else{ burst('DRAW','d'); sfx.draw(); say(R1(TAUNT.draw)); superM=Math.min(100,superM+10); }
+  document.body.classList.toggle('fire',streak>=3);
+  setHp();
+  if(hpB<=0||hpY<=0){
+    matchOver=true;
+    setTimeout(()=>{
+      if(hpB<=0){burst('K.O.!','ko');sfx.ko();confetti(300);say(R1(TAUNT.ko));stats.kos++;unlock('ko');if(!roundLostHp)unlock('flawless');if(difficulty==='boss')unlock('boss');
+        $('verdict').textContent='You knocked out the bot!';}
+      else{burst('K.O.','ko l');sfx.koMe();say(R1(TAUNT.koMe));$('verdict').textContent='The bot knocked you out!';$('verdict').style.color='var(--lose)';}
+      saveStats();
+    },900);
+  }
+}
+/* spark burst from the winning hand */
+function sparks(res){
+  if(res==='d')return;
+  const el=res==='w'?$('youHand'):$('aiHand'), r=el.getBoundingClientRect();
+  cv.width=innerWidth*devicePixelRatio; cv.height=innerHeight*devicePixelRatio;
+  const cx0=(r.left+r.width/2)*devicePixelRatio, cy0=(r.top+r.height/2)*devicePixelRatio, cols=res==='w'?['#ffe66d','#ff6fb5','#fff','#3fe0c0']:['#ff4f8b','#a99bff','#fff'];
+  for(let i=0;i<70;i++){const a=Math.random()*Math.PI*2,s=6+Math.random()*16;parts.push({x:cx0,y:cy0,vx:Math.cos(a)*s,vy:Math.sin(a)*s-4,r:a,vr:.3,s:(4+Math.random()*6)*devicePixelRatio,c:cols[i%cols.length],life:0});}
+  if(!raf) raf=requestAnimationFrame(tick);
+}
+/* ---------- synth sound effects + music (Web Audio) ---------- */
+const sfx=(()=>{
+  let ac=null, on=(()=>{try{return localStorage.getItem('rps-sound')!=='off'}catch(e){return true}})(), music=null;
+  const ctx=()=>{ if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();} if(ac.state==='suspended')ac.resume(); return ac; };
+  function tone(f,d=.12,type='square',v=.08,when=0,slide=0){ if(!on)return; const a=ctx(),t=a.currentTime+when,o=a.createOscillator(),g=a.createGain();
+    o.type=type;o.frequency.setValueAtTime(f,t); if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,f*slide),t+d);
+    g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(a.destination);o.start(t);o.stop(t+d+.02);}
+  function noise(d=.25,v=.15){ if(!on)return; const a=ctx(),b=a.createBuffer(1,a.sampleRate*d,a.sampleRate),ch=b.getChannelData(0);for(let i=0;i<ch.length;i++)ch[i]=(Math.random()*2-1)*(1-i/ch.length);
+    const s=a.createBufferSource(),g=a.createGain();s.buffer=b;g.gain.value=v;s.connect(g).connect(a.destination);s.start();}
+  const notes=(arr,type='square',v=.07)=>arr.forEach(([f,t,d])=>tone(f,d||.14,type,v,t));
+  function startMusic(){ if(music||!on)return; const a=ctx(); const bass=[55,55,65.4,49]; let step=0;
+    music=setInterval(()=>{ if(!on)return; const b=bass[Math.floor(step/8)%4]; tone(b*(step%2?2:1),.18,'sawtooth',.035); if(step%4===0)tone(b*4,.08,'triangle',.03); if(step%8===4)tone(b*6,.1,'triangle',.025); step++; },190); }
+  function stopMusic(){clearInterval(music);music=null;}
+  const api={
+    beep:()=>{tone(440,.12,'square',.07);},
+    shoot:()=>{tone(880,.25,'square',.08,0,.5);noise(.3,.12);},
+    win:()=>notes([[523,0],[659,.1],[784,.2],[1047,.3,.3]]),
+    superHit:()=>{noise(.5,.25);notes([[392,0],[523,.08],[659,.16],[784,.24],[1047,.32],[1319,.4,.4]],'sawtooth',.07);},
+    lose:()=>notes([[392,0,.18],[330,.16,.18],[262,.32,.35]],'sawtooth',.06),
+    draw:()=>notes([[440,0],[440,.15]],'triangle',.08),
+    ko:()=>{noise(.6,.3);notes([[262,0,.2],[330,.15,.2],[392,.3,.2],[523,.45,.6]],'square',.09);},
+    koMe:()=>notes([[330,0,.3],[311,.25,.3],[294,.5,.3],[277,.75,.7]],'sawtooth',.07),
+    ach:()=>notes([[784,0,.1],[1047,.08,.1],[1568,.16,.25]],'triangle',.08),
+    click:()=>tone(660,.05,'square',.04),
+    toggle(){ on=!on; try{localStorage.setItem('rps-sound',on?'on':'off')}catch(e){} if(on){startMusic();api.click();} else stopMusic(); return on; },
+    start:()=>{ if(on) startMusic(); },
+    get on(){return on;}
+  };
+  return api;
+})();
+$('mute').textContent=sfx.on?'🔊':'🔇'; $('mute').setAttribute('aria-label',sfx.on?'Sound on':'Sound off');
+$('mute').onclick=()=>{const o=sfx.toggle();$('mute').textContent=o?'🔊':'🔇';$('mute').setAttribute('aria-label',o?'Sound on':'Sound off');};
+addEventListener('pointerdown',function once(){sfx.start();removeEventListener('pointerdown',once);});
+setHp(); saveStats();

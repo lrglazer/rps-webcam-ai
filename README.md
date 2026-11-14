@@ -8,6 +8,9 @@ Play rock paper scissors against an AI using your webcam. You train a neural net
 
 ## Features
 
+- **Arcade battles.** Health bars, rounds, combos, a super meter, K.O. finishes, a trash-talking robot, three difficulty levels (Easy, Normal, Boss), achievements, saved high scores, and synthwave sound effects and music.
+- **Instant hand tracking.** MediaPipe finds the 21 joints of your hand and reads rock, paper or scissors from which fingers are straight, so you can play without training anything.
+
 - **Train your own model in seconds.** Record examples of each hand shape with your webcam, and a convolutional neural network (CNN) trains right in your browser.
 - **Live predictions.** See the model's confidence for rock, paper, and scissors update in real time.
 - **An opponent that learns you.** The AI studies your past throws with a Markov model and plays the move that beats what it expects.
